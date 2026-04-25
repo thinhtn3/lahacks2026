@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from app.routes.agent_routes import router as agent_router
+from app.routes.speech_routes import router as speech_router
 
 app = FastAPI(title="Startup Idea Validator")
 
@@ -16,3 +17,4 @@ app.add_middleware(
 )
 
 app.include_router(agent_router)
+app.include_router(speech_router)

@@ -33,9 +33,31 @@ button {
   cursor: pointer;
 }
 
+button.secondary {
+  background: transparent;
+  color: var(--text-h);
+  border: 1px solid var(--border);
+}
+
+button.secondary.danger {
+  border-color: rgba(224, 85, 85, 0.6);
+  color: #e05555;
+}
+
 button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.actions button {
+  align-self: auto;
 }
 
 .agent-card {
@@ -44,6 +66,60 @@ button:disabled {
   border: 1px solid var(--border);
   border-radius: 12px;
   text-align: left;
+}
+
+.delivery-card {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  text-align: left;
+  opacity: 0.95;
+}
+
+.delivery-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.delivery-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.delivery-score {
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.delivery-feedback {
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.delivery-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 6px 0 8px;
+}
+
+.delivery-pill {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
 }
 
 .agent-card h2 {

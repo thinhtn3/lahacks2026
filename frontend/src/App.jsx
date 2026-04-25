@@ -1,75 +1,163 @@
 import { useRef, useState } from 'react'
 import './App.css'
 
+const API = 'http://localhost:8000'
+
+function AgentCard({ agent, isActive }) {
+  return (
+    <div className={`agent-card${isActive ? ' agent-card--active' : ''}`}>
+      <div className="agent-card-header">
+        <h3>{agent.name}</h3>
+        <span className="confidence">{agent.confidence}/100</span>
+      </div>
+      <div className="confidence-bar">
+        <div className="confidence-bar-fill" style={{ width: `${agent.confidence}%` }} />
+      </div>
+      <ul>
+        {agent.insights.map((insight, i) => <li key={i}>{insight}</li>)}
+      </ul>
+      <div className="key-risk"><strong>Key risk:</strong> {agent.key_risk}</div>
+    </div>
+  )
+}
+
 function App() {
-  const [prompt, setPrompt] = useState('')
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
+  // Phase state machine: idle → analyzing → clarifying → verdict-loading → done
+  const [phase, setPhase] = useState('idle')
+  const [idea, setIdea] = useState('')
+  const [agents, setAgents] = useState([])
+  const [pendingDomains, setPendingDomains] = useState([])
+  const [history, setHistory] = useState([])
+  const [currentAnswer, setCurrentAnswer] = useState('')
+  const [verdict, setVerdict] = useState(null)
   const [error, setError] = useState(null)
-  // Voice → text (browser records audio, backend transcribes via ElevenLabs).
+
+  // Speech state
   const [recording, setRecording] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [delivery, setDelivery] = useState(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
 
-  async function handleSubmit(e) {
+  const isbusy = phase === 'analyzing' || phase === 'verdict-loading' || transcribing
+
+  async function handleAnalyze(e) {
     e.preventDefault()
-    if (!prompt.trim()) return
-    setLoading(true)
-    setResult(null)
+    if (!idea.trim()) return
+    setPhase('analyzing')
+    setAgents([])
+    setPendingDomains([])
+    setHistory([])
+    setVerdict(null)
     setError(null)
     try {
-      const res = await fetch('http://localhost:8000/agents/market-analyst', {
+      const res = await fetch(`${API}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ idea }),
       })
       if (!res.ok) throw new Error(`Server error: ${res.status}`)
-      setResult(await res.json())
+      const data = await res.json()
+      setAgents(data.agents)
+      setPendingDomains(data.pending_domains)
+      if (data.pending_domains.length === 0) {
+        await fetchVerdict(idea, data.agents, [])
+      } else {
+        setPhase('clarifying')
+      }
     } catch (err) {
       setError(err.message)
-    } finally {
-      setLoading(false)
+      setPhase('idle')
     }
   }
 
+  async function handleClarify(e) {
+    e.preventDefault()
+    if (!currentAnswer.trim()) return
+    const domain = pendingDomains[0]
+    const agentForDomain = agents.find(a => a.domain === domain)
+    const question = agentForDomain?.clarifying_question ?? ''
+    setPhase('analyzing')
+    setError(null)
+    try {
+      const res = await fetch(`${API}/api/clarify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          idea,
+          agents,
+          history,
+          domain,
+          question,
+          answer: currentAnswer,
+        }),
+      })
+      if (!res.ok) throw new Error(`Server error: ${res.status}`)
+      const data = await res.json()
+      setAgents(data.agents)
+      setPendingDomains(data.pending_domains)
+      setHistory(data.history)
+      setCurrentAnswer('')
+      if (data.pending_domains.length === 0) {
+        await fetchVerdict(idea, data.agents, data.history)
+      } else {
+        setPhase('clarifying')
+      }
+    } catch (err) {
+      setError(err.message)
+      setPhase('clarifying')
+    }
+  }
+
+  async function fetchVerdict(ideaVal, agentsVal, historyVal) {
+    setPhase('verdict-loading')
+    try {
+      const res = await fetch(`${API}/api/verdict`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idea: ideaVal, agents: agentsVal, history: historyVal }),
+      })
+      if (!res.ok) throw new Error(`Server error: ${res.status}`)
+      const data = await res.json()
+      setVerdict(data)
+      setPhase('done')
+    } catch (err) {
+      setError(err.message)
+      setPhase('clarifying')
+    }
+  }
+
+  function handleReset() {
+    setPhase('idle')
+    setIdea('')
+    setAgents([])
+    setPendingDomains([])
+    setHistory([])
+    setCurrentAnswer('')
+    setVerdict(null)
+    setError(null)
+    setDelivery(null)
+  }
+
+  // ── Speech ──────────────────────────────────────────────────────────────
   async function transcribeAudio(blob) {
     setTranscribing(true)
     setError(null)
     try {
       const fd = new FormData()
       fd.append('file', blob, 'pitch.webm')
-
-      const res = await fetch('http://localhost:8000/speech/transcribe', {
-        method: 'POST',
-        body: fd,
-      })
+      const res = await fetch(`${API}/speech/transcribe`, { method: 'POST', body: fd })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data?.detail || `Transcription error: ${res.status}`)
-      }
+      if (!res.ok) throw new Error(data?.detail || `Transcription error: ${res.status}`)
       const text = data?.text
       if (!text || typeof text !== 'string') throw new Error('No transcript returned')
-
       if (typeof data?.delivery_score === 'number' && typeof data?.delivery_feedback === 'string') {
-        setDelivery({
-          score: data.delivery_score,
-          feedback: data.delivery_feedback,
-          metrics: data?.delivery_metrics || null,
-        })
+        setDelivery({ score: data.delivery_score, feedback: data.delivery_feedback, metrics: data?.delivery_metrics || null })
       } else {
         setDelivery(null)
       }
-
-      // Drop the transcript into the same prompt box the app already uses.
-      const cleaned =
-        text.trim().replace(/\s+/g, ' ').replace(/[.?!]$/, m => m) || text.trim()
-      setPrompt(
-        cleaned.endsWith('.') || cleaned.endsWith('?') || cleaned.endsWith('!')
-          ? cleaned
-          : `${cleaned}.`
-      )
+      const cleaned = text.trim().replace(/\s+/g, ' ')
+      setIdea(cleaned.endsWith('.') || cleaned.endsWith('?') || cleaned.endsWith('!') ? cleaned : `${cleaned}.`)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -79,36 +167,22 @@ function App() {
 
   async function startRecording() {
     setError(null)
-    if (recording || transcribing || loading) return
-
-    // Start each new pitch from a clean slate.
-    setPrompt('')
-    setResult(null)
+    if (recording || transcribing || isbusy) return
+    setIdea('')
+    setAgents([])
     setDelivery(null)
-
-    // These two checks cover most browser compatibility issues.
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Audio recording is not supported in this browser.')
-      return
-    }
-    if (!window.MediaRecorder) {
-      setError('MediaRecorder is not supported in this browser.')
-      return
-    }
-
+    setVerdict(null)
+    setPhase('idle')
+    if (!navigator.mediaDevices?.getUserMedia) { setError('Audio recording is not supported in this browser.'); return }
+    if (!window.MediaRecorder) { setError('MediaRecorder is not supported in this browser.'); return }
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     const recorder = new MediaRecorder(stream)
     chunksRef.current = []
-    recorder.ondataavailable = e => {
-      if (e.data && e.data.size > 0) chunksRef.current.push(e.data)
-    }
+    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunksRef.current.push(e.data) }
     recorder.onstop = async () => {
-      // Always stop the mic, then transcribe the recorded audio.
       stream.getTracks().forEach(t => t.stop())
-      const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' })
-      await transcribeAudio(blob)
+      await transcribeAudio(new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' }))
     }
-
     mediaRecorderRef.current = recorder
     recorder.start()
     setRecording(true)
@@ -117,69 +191,127 @@ function App() {
   function stopRecording() {
     if (!recording) return
     setRecording(false)
-    try {
-      mediaRecorderRef.current?.stop()
-    } catch (e) {
-      setError('Failed to stop recording.')
-    }
+    try { mediaRecorderRef.current?.stop() } catch { setError('Failed to stop recording.') }
   }
+
+  // ── Current clarifying question ─────────────────────────────────────────
+  const activeDomain = pendingDomains[0]
+  const activeAgent = agents.find(a => a.domain === activeDomain)
 
   return (
     <div className="container">
       <h1>Startup Idea Validator</h1>
 
-      <form onSubmit={handleSubmit} className="input-form">
-        <textarea
-          value={prompt}
-          onChange={e => setPrompt(e.target.value)}
-          placeholder="Describe your startup idea..."
-          rows={4}
-        />
-        <div className="actions">
-          <button
-            type="button"
-            className={recording ? 'secondary danger' : 'secondary'}
-            onClick={recording ? stopRecording : startRecording}
-            disabled={loading || transcribing}
-          >
-            {recording ? 'Stop recording' : (transcribing ? 'Transcribing…' : 'Record pitch')}
-          </button>
-
-          <button type="submit" disabled={loading || recording || transcribing}>
-            {loading ? 'Analyzing...' : 'Analyze'}
-          </button>
-        </div>
-      </form>
+      {/* ── Input form (only when idle or done) ── */}
+      {(phase === 'idle' || phase === 'done') && (
+        <form onSubmit={handleAnalyze} className="input-form">
+          <textarea
+            value={idea}
+            onChange={e => setIdea(e.target.value)}
+            placeholder="Describe your startup idea..."
+            rows={4}
+          />
+          <div className="actions">
+            <button
+              type="button"
+              className={recording ? 'secondary danger' : 'secondary'}
+              onClick={recording ? stopRecording : startRecording}
+              disabled={isbusy || transcribing}
+            >
+              {recording ? 'Stop recording' : transcribing ? 'Transcribing…' : 'Record pitch'}
+            </button>
+            <button type="submit" disabled={isbusy || recording || transcribing}>
+              {phase === 'done' ? 'Analyze again' : 'Analyze'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {error && <div className="error">{error}</div>}
 
-      {result && (
-        <>
-          <div className="agent-card">
-            <h2>Market Analyst <span className="confidence">{result.confidence}/100</span></h2>
-            <ul>
-              {result.insights.map((insight, i) => <li key={i}>{insight}</li>)}
-            </ul>
-            <div className="key-risk"><strong>Key risk:</strong> {result.key_risk}</div>
-          </div>
+      {/* ── Loading spinner ── */}
+      {(phase === 'analyzing' || phase === 'verdict-loading') && (
+        <div className="loading-state">
+          {phase === 'analyzing' ? 'Running agents…' : 'Generating verdict…'}
+        </div>
+      )}
 
-          {delivery && (
-            <div className="delivery-card">
-              <div className="delivery-top">
-                <div className="delivery-title">Delivery score</div>
-                <div className="delivery-score">{delivery.score}/100</div>
-              </div>
-              {delivery.metrics && (
-                <div className="delivery-metrics">
-                  <span className="delivery-pill">Pace: {delivery.metrics?.pace?.label}</span>
-                  <span className="delivery-pill">Fillers: {delivery.metrics?.fillers?.label}</span>
-                  <span className="delivery-pill">Pauses: {delivery.metrics?.pauses?.label}</span>
-                </div>
-              )}
-              <div className="delivery-feedback">{delivery.feedback}</div>
+      {/* ── Agent cards ── */}
+      {agents.length > 0 && (
+        <div className="agents-grid">
+          {agents.map(agent => (
+            <AgentCard
+              key={agent.domain}
+              agent={agent}
+              isActive={phase === 'clarifying' && agent.domain === activeDomain}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* ── Clarifying question panel ── */}
+      {phase === 'clarifying' && activeAgent && (
+        <div className="clarify-panel">
+          <div className="clarify-label">
+            <span className="clarify-agent">{activeAgent.name}</span> wants to ask:
+          </div>
+          <p className="clarify-question">{activeAgent.clarifying_question}</p>
+          <form onSubmit={handleClarify} className="clarify-form">
+            <textarea
+              value={currentAnswer}
+              onChange={e => setCurrentAnswer(e.target.value)}
+              placeholder="Your answer..."
+              rows={3}
+            />
+            <div className="actions">
+              <span className="clarify-progress">
+                {pendingDomains.length} question{pendingDomains.length !== 1 ? 's' : ''} remaining
+              </span>
+              <button type="submit" disabled={!currentAnswer.trim()}>Submit answer</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── Verdict ── */}
+      {phase === 'done' && verdict && (
+        <div className={`verdict-banner verdict-banner--${verdict.verdict.toLowerCase().replace(' ', '-')}`}>
+          <div className="verdict-label">Verdict</div>
+          <div className="verdict-value">{verdict.verdict}</div>
+          <div className="verdict-confidence">
+            <span className="verdict-confidence-label">Overall confidence</span>
+            <span className="verdict-confidence-score">{verdict.confidence_score}/100</span>
+          </div>
+          <div className="verdict-section">
+            <strong>Top risks</strong>
+            <ul>{verdict.top_risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
+          </div>
+          <div className="verdict-section">
+            <strong>Suggestions</strong>
+            <ul>{verdict.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
+          </div>
+          <button className="secondary" onClick={handleReset} style={{ marginTop: 16 }}>
+            Start over
+          </button>
+        </div>
+      )}
+
+      {/* ── Delivery score (from speech) ── */}
+      {delivery && phase === 'idle' && (
+        <div className="delivery-card">
+          <div className="delivery-top">
+            <div className="delivery-title">Delivery score</div>
+            <div className="delivery-score">{delivery.score}/100</div>
+          </div>
+          {delivery.metrics && (
+            <div className="delivery-metrics">
+              <span className="delivery-pill">Pace: {delivery.metrics?.pace?.label}</span>
+              <span className="delivery-pill">Fillers: {delivery.metrics?.fillers?.label}</span>
+              <span className="delivery-pill">Pauses: {delivery.metrics?.pauses?.label}</span>
             </div>
           )}
-        </>
+          <div className="delivery-feedback">{delivery.feedback}</div>
+        </div>
       )}
     </div>
   )

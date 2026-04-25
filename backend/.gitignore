@@ -1,11 +1,1 @@
-.env
-__pycache__/
-*.pyc
-*.pyo
-.venv/
-venv/
-*.egg-info/
-dist/
-build/
-.pytest_cache/
-.mypy_cache/
+# Root .gitignore covers Python, venv, .env, and OS files.

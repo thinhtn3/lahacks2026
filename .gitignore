@@ -10,27 +10,41 @@ dist/
 build/
 .pytest_cache/
 .mypy_cache/
+.coverage
+htmlcov/
+*.log
 
-# Environment
+# Environment / secrets
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+*.pfx
 
 # Node
 node_modules/
-dist/
 .next/
 .nuxt/
 
-# Vite
+# Vite build output
 frontend/dist/
+dist/
 
 # OS
 .DS_Store
+.DS_Store?
 Thumbs.db
+ehthumbs.db
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.suo
+
+# Misc
+*.sqlite
+*.db

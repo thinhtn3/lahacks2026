@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel
 
 
@@ -9,20 +9,26 @@ class AgentResult(BaseModel):
     key_risk: str
 
 
+class ConflictResult(BaseModel):
+    has_conflict: bool
+    conflict_summary: Optional[str] = None
+
+
 class AnalyzeRequest(BaseModel):
     idea: str
 
 
 class AnalyzeResponse(BaseModel):
     agents: list[AgentResult]
-    clarifying_question: str
+    conflict: ConflictResult
+    clarifying_question: Optional[str] = None  # set only when conflict.has_conflict=True
 
 
 class VerdictRequest(BaseModel):
     idea: str
     prior_agents: list[AgentResult]
-    clarifying_question: str
-    clarifying_answer: str
+    clarifying_question: Optional[str] = None
+    clarifying_answer: Optional[str] = None
 
 
 class VerdictResponse(BaseModel):

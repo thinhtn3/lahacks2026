@@ -1,0 +1,22 @@
+SAMPLE STARTUP IDEA PROMPTS FOR TESTING
+========================================
+
+1. An app that uses AI to match college students with internships based on their GitHub activity and class projects, bypassing traditional resume screening.
+
+2. A subscription service that delivers pre-portioned ingredients for culturally authentic meals from a different country each week, with recipe videos from native home cooks.
+
+3. A B2B SaaS tool that automatically detects and redacts PII from internal Slack messages and documents before they're shared with third-party vendors.
+
+4. A peer-to-peer parking marketplace where homeowners rent out their driveways by the hour in dense urban neighborhoods, like Airbnb for parking spots.
+
+5. A mobile app that gamifies physical therapy exercises for post-surgery recovery patients, with real-time form feedback using the phone camera.
+
+6. A platform that connects freelance translators with small e-commerce businesses to localize product listings for international markets in under 24 hours.
+
+7. An AI-powered legal document reviewer for small businesses that flags risky clauses in vendor contracts without needing a lawyer.
+
+8. A social app for plant parents to trade cuttings and seeds locally, with care guides and a community Q&A for rare houseplants.
+
+9. A SaaS dashboard that aggregates all sustainability metrics (carbon, water, waste) for manufacturing SMBs and auto-generates ESG compliance reports.
+
+10. An on-demand tutoring platform where high school students can book 15-minute micro-sessions with verified college students for quick homework help.

@@ -6,7 +6,12 @@ class AnalyzeRequest(BaseModel):
     prompt: str
 
 
-class MarketAnalystResponse(BaseModel):
+class AgentResponse(BaseModel):
     insights: List[str]
     confidence: int
     key_risk: str
+
+
+MarketAnalystResponse = AgentResponse
+ProblemValidatorResponse = AgentResponse
+RiskAnalystResponse = AgentResponse

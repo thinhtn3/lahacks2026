@@ -15,7 +15,7 @@ def get_client() -> genai.Client:
 async def generate_json(prompt: str, schema: type) -> dict:
     client = get_client()
     response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
+        model=settings.gemini_model,
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json",

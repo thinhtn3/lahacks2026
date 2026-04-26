@@ -15,6 +15,11 @@ class ClarifyingQA(BaseModel):
     answer: str
 
 
+class Source(BaseModel):
+    title: str
+    url: str
+
+
 class AgentResult(BaseModel):
     domain: AgentDomain
     name: str
@@ -22,6 +27,7 @@ class AgentResult(BaseModel):
     confidence: int
     key_risk: str
     clarifying_question: str
+    sources: list[Source] = []
 
 
 class AnalyzeRequest(BaseModel):

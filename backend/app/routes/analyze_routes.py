@@ -1,6 +1,11 @@
+import asyncio
+import json
+
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.schemas.validator import (
+    AgentResult,
     AnalyzeRequest,
     AnalyzeResponse,
     ClarifyRequest,
@@ -9,7 +14,7 @@ from app.schemas.validator import (
     VerdictRequest,
     VerdictResponse,
 )
-from app.services.agents import run_all_agents_parallel, run_single_agent
+from app.services.agents import AGENTS, run_agent, run_all_agents_parallel, run_single_agent
 from app.services.orchestrator import pending_domains
 from app.services.verdict import generate_verdict
 
@@ -23,6 +28,44 @@ async def analyze(req: AnalyzeRequest):
         return AnalyzeResponse(agents=agents, pending_domains=pending_domains(agents, history=[]))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/analyze/stream")
+async def analyze_stream(req: AnalyzeRequest):
+    async def generator():
+        queue: asyncio.Queue = asyncio.Queue()
+
+        async def run_and_enqueue(spec):
+            try:
+                result = await run_agent(spec, req.idea, [])
+            except Exception as e:
+                result = AgentResult(
+                    domain=spec.domain,
+                    name=spec.name,
+                    insights=[f"Agent failed: {type(e).__name__}: {e}"],
+                    confidence=0,
+                    key_risk="Agent error — treat this domain as unvalidated.",
+                    clarifying_question="",
+                )
+            await queue.put(result)
+
+        tasks = [asyncio.create_task(run_and_enqueue(spec)) for spec in AGENTS]
+
+        all_results = []
+        for _ in range(len(AGENTS)):
+            result = await queue.get()
+            all_results.append(result)
+            yield f"data: {json.dumps({'type': 'agent', 'agent': result.model_dump()})}\n\n"
+
+        await asyncio.gather(*tasks)
+        pd = pending_domains(all_results, [])
+        yield f"data: {json.dumps({'type': 'done', 'pending_domains': pd})}\n\n"
+
+    return StreamingResponse(
+        generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/clarify", response_model=ClarifyResponse)

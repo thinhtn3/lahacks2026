@@ -7,10 +7,11 @@ import { AGENTS, ClarificationRequest } from "@/lib/venture-types";
 interface Props {
   request: ClarificationRequest | null;
   onSubmit: (answer: string) => void;
+  onSkip?: () => void;
   onDismiss?: () => void;
 }
 
-export const ClarificationDialog = ({ request, onSubmit, onDismiss }: Props) => {
+export const ClarificationDialog = ({ request, onSubmit, onSkip, onDismiss }: Props) => {
   const [text, setText] = useState("");
   useEffect(() => { if (request) setText(""); }, [request]);
 
@@ -39,7 +40,14 @@ export const ClarificationDialog = ({ request, onSubmit, onDismiss }: Props) => 
           placeholder="A sentence or two is plenty."
           className="bg-surface border-border rounded-2xl p-4 mt-2"
         />
-        <div className="flex justify-end mt-2">
+        <div className="flex items-center justify-between mt-2">
+          <button
+            type="button"
+            onClick={onSkip}
+            className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+          >
+            skip
+          </button>
           <Button variant="hero" disabled={!text.trim()} onClick={() => onSubmit(text.trim())}>
             Continue
           </Button>

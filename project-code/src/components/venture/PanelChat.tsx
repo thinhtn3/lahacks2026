@@ -7,11 +7,15 @@ interface Props {
   messages: ChatMessage[];
   onSend?: (text: string) => void;
   disabled?: boolean;
+  disabledPlaceholder?: string;
+  headerAction?: React.ReactNode;
+  transcriptAction?: React.ReactNode;
+  footerAction?: React.ReactNode;
 }
 
 const agentMap = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
 
-export const PanelChat = ({ messages, onSend, disabled }: Props) => {
+export const PanelChat = ({ messages, onSend, disabled, disabledPlaceholder, headerAction, transcriptAction, footerAction }: Props) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [text, setText] = useState("");
 
@@ -33,7 +37,13 @@ export const PanelChat = ({ messages, onSend, disabled }: Props) => {
           <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Transcript</div>
           <div className="font-display text-xl mt-1.5">Live commentary</div>
         </div>
-        <span className="h-1.5 w-1.5 rounded-full bg-foreground/60 animate-soft-pulse" />
+        <div className="flex items-center gap-3">
+          {headerAction}
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-foreground/60 animate-soft-pulse" />
+            <span>Converging...</span>
+          </div>
+        </div>
       </div>
 
       <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-thin py-6 space-y-7 pr-1">
@@ -69,28 +79,43 @@ export const PanelChat = ({ messages, onSend, disabled }: Props) => {
               </motion.div>
             );
           })}
+          {transcriptAction && (
+            <motion.div
+              key="transcript-action"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+              className="pt-1"
+            >
+              {transcriptAction}
+            </motion.div>
+          )}
         </AnimatePresence>
       </div>
 
       <div className="border-t border-border pt-4">
-        <div className="flex items-center gap-2 rounded-full bg-secondary px-4 py-1.5 transition-colors focus-within:bg-secondary/70">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
-            placeholder={disabled ? "Panel is speaking…" : "Add a thought…"}
-            disabled={disabled}
-            className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground/60 outline-none disabled:opacity-50 py-2"
-          />
-          <button
-            onClick={submit}
-            disabled={disabled || !text.trim()}
-            className="h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-30 transition-opacity"
-            aria-label="Send"
-          >
-            <ArrowUp className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        {footerAction ? (
+          <div className="flex justify-end">{footerAction}</div>
+        ) : (
+          <div className="flex items-center gap-2 rounded-full bg-secondary px-4 py-1.5 transition-colors focus-within:bg-secondary/70">
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submit()}
+              placeholder={disabled ? (disabledPlaceholder ?? "Panel is speaking…") : "Add a thought…"}
+              disabled={disabled}
+              className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground/60 outline-none disabled:opacity-50 py-2"
+            />
+            <button
+              onClick={submit}
+              disabled={disabled || !text.trim()}
+              className="h-7 w-7 rounded-full bg-foreground text-background flex items-center justify-center disabled:opacity-30 transition-opacity"
+              aria-label="Send"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

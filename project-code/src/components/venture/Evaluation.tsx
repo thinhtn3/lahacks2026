@@ -8,6 +8,7 @@ import { AgentDiagram } from "./AgentDiagram";
 import { PanelChat } from "./PanelChat";
 import { ClarificationDialog } from "./ClarificationDialog";
 import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -31,6 +32,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [activeAgent, setActiveAgent] = useState<AgentId | "orchestrator" | null>(null);
   const [clarification, setClarification] = useState<ClarificationRequest | null>(null);
+  const [dismissedClarification, setDismissedClarification] = useState<ClarificationRequest | null>(null);
   const [phase, setPhase] = useState<"intro" | "panel" | "awaiting" | "reeval" | "done">("intro");
   const [conflicts, setConflicts] = useState<Array<[AgentId, AgentId]>>([]);
   const queueRef = useRef<AgentTurn[]>([]);
@@ -42,6 +44,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
   const pendingDomainsRef = useRef<BackendDomain[]>([]);
   const [queueVersion, setQueueVersion] = useState(0);
   const [streamReady, setStreamReady] = useState(false);
+  const [isViewingSummary, setIsViewingSummary] = useState(false);
 
   const [sourcesByAgent, setSourcesByAgent] = useState<Record<AgentId, AgentSource[]>>(
     { problem: [], market: [], business: [], tech: [] }
@@ -171,6 +174,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
       };
       setTimeout(() => {
         setClarification(req);
+        setDismissedClarification(null);
         setPhase("awaiting");
       }, 800);
       return;
@@ -279,14 +283,28 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
       return next;
     });
     setConflicts([]);
-    const t = setTimeout(() => onComplete(scores, backendAgentsRef.current.agents, backendAgentsRef.current.history), 1600);
-    return () => clearTimeout(t);
-  }, [phase, onComplete]); // agentStates intentionally excluded — read via ref to prevent setAgentStates from cancelling the timeout
+  }, [phase]); // agentStates intentionally excluded — read via ref
+
+  const handleViewSummary = async () => {
+    if (isViewingSummary) return;
+    const snap = agentStatesRef.current;
+    const scores = (Object.keys(snap) as AgentId[]).reduce((acc, k) => {
+      acc[k] = snap[k].score ?? 50;
+      return acc;
+    }, {} as Record<AgentId, number>);
+    try {
+      setIsViewingSummary(true);
+      await onComplete(scores, backendAgentsRef.current.agents, backendAgentsRef.current.history);
+    } finally {
+      setIsViewingSummary(false);
+    }
+  };
 
   // Central confidence: builds as each agent reports in.
   // Only spoken agents (score !== null) contribute — the ring climbs progressively.
   const centralConfidence = useMemo(() => {
     if (phase === "intro") return 0;
+    if (phase === "done") return 100;
     const spoken = AGENTS.filter((a) => agentStates[a.id].score !== null);
     if (spoken.length === 0) return 0;
     return spoken.reduce((acc, a) => acc + agentStates[a.id].confidence, 0) / spoken.length;
@@ -302,6 +320,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
     "Synthesizing report";
 
   const transcriptCollapsed = !!clarification;
+  const activeClarification = clarification ?? dismissedClarification;
 
   return (
     <div className="h-screen overflow-hidden flex flex-col relative bg-background">
@@ -317,7 +336,6 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
           {input.startupName || "Untitled"}
         </div>
       </header>
-
       <main
         className={cn(
           "relative z-10 flex-1 min-h-0 grid px-8 md:px-12 pt-2 pb-6",
@@ -364,7 +382,37 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
                 onMouseDown={handleDragStart}
                 className="absolute left-0 top-0 bottom-0 w-1.5 cursor-col-resize z-10 hover:bg-border/60 transition-colors"
               />
-              <PanelChat messages={messages} onSend={handleInlineSend} disabled={isPanelSpeaking} />
+              <PanelChat
+                messages={messages}
+                onSend={handleInlineSend}
+                disabled={isPanelSpeaking}
+                transcriptAction={phase === "done" ? (
+                  <p className="text-sm text-muted-foreground/80 italic font-light">
+                    The panel has reached a conclusion.
+                  </p>
+                ) : (phase === "awaiting" && !clarification && dismissedClarification ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClarification(dismissedClarification);
+                      setDismissedClarification(null);
+                    }}
+                    className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground transition-colors"
+                  >
+                    Return to quick question
+                  </button>
+                ) : undefined)}
+                footerAction={phase === "done" ? (
+                  <Button
+                    size="lg"
+                    variant="hero"
+                    onClick={handleViewSummary}
+                    disabled={isViewingSummary}
+                  >
+                    {isViewingSummary ? "Preparing summary..." : "View summary →"}
+                  </Button>
+                ) : undefined}
+              />
             </motion.div>
           )}
         </AnimatePresence>
@@ -372,8 +420,16 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
 
       <ClarificationDialog
         request={clarification}
-        onSubmit={(answer) => clarification && handleClarificationSubmit(answer, clarification.agentId)}
-        onDismiss={() => { setClarification(null); setPhase("done"); }}
+        onSubmit={(answer) => activeClarification && handleClarificationSubmit(answer, activeClarification.agentId)}
+        onSkip={() => {
+          setClarification(null);
+          setDismissedClarification(null);
+          setPhase("done");
+        }}
+        onDismiss={() => {
+          if (clarification) setDismissedClarification(clarification);
+          setClarification(null);
+        }}
       />
     </div>
   );

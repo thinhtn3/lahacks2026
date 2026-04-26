@@ -1,0 +1,130 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PitchLab — light, editorial, Apple-inspired design system. All HSL. */
+
+@layer base {
+  :root {
+    /* Light, premium */
+    --background: 0 0% 100%;
+    --foreground: 240 6% 5%;
+
+    --surface: 0 0% 98%;
+    --surface-elevated: 0 0% 100%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 6% 5%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 6% 5%;
+
+    /* Soft desaturated baby blue */
+    --primary: 215 100% 84%;
+    --primary-foreground: 240 8% 10%;
+    --primary-glow: 215 100% 90%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 240 6% 10%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 240 4% 45%;
+
+    --accent: 215 100% 84%;
+    --accent-foreground: 240 8% 10%;
+
+    --success: 150 35% 50%;
+    --warning: 30 60% 60%;
+    --destructive: 0 60% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 92%;
+    --ring: 215 100% 84%;
+
+    --radius: 1rem;
+
+    /* Agent accents — soft and desaturated */
+    --agent-1: 215 60% 65%;
+    --agent-2: 260 35% 65%;
+    --agent-3: 30 45% 60%;
+    --agent-4: 180 30% 55%;
+
+    --shadow-soft: 0 1px 2px hsl(240 6% 5% / 0.04), 0 8px 24px -12px hsl(240 6% 5% / 0.08);
+    --shadow-card: 0 1px 3px hsl(240 6% 5% / 0.04), 0 12px 40px -16px hsl(240 6% 5% / 0.08);
+
+    --transition-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 6% 5%;
+    --sidebar-primary: 215 100% 84%;
+    --sidebar-primary-foreground: 240 8% 10%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 240 6% 10%;
+    --sidebar-border: 0 0% 90%;
+    --sidebar-ring: 215 100% 84%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  .font-display {
+    font-family: 'Playfair Display', Georgia, serif;
+    letter-spacing: -0.015em;
+  }
+
+  .font-mono {
+    font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "tnum";
+  }
+}
+
+@layer utilities {
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.3); }
+}
+
+@layer base {
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes soft-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  @keyframes dots {
+    0%, 20% { content: '·'; }
+    40% { content: '··'; }
+    60%, 100% { content: '···'; }
+  }
+
+  .animate-fade-up { animation: fade-up 0.6s var(--transition-smooth) both; }
+  .animate-soft-pulse { animation: soft-pulse 2.4s ease-in-out infinite; }
+  .loading-dots::after { content: '·'; animation: dots 1.6s infinite; display: inline-block; width: 1em; }
+}

@@ -60,13 +60,21 @@ class _AgentLLMOutput(BaseModel):
     clarifying_question: str
 
 
-def _render_history(history: list[ClarifyingQA]) -> str:
+def _render_history(history: list[ClarifyingQA], prior_confidence: int | None = None) -> str:
     if not history:
         return ""
     lines = ["\n\nPrior clarifications:"]
     for qa in history:
         lines.append(f"Q: {qa.question}")
         lines.append(f"A: {qa.answer}")
+    if prior_confidence is not None:
+        lines.append(
+            f"\nYour previous confidence score was {prior_confidence}/100. "
+            "Re-evaluate now with the clarifying answer above in mind. "
+            "If the answer directly addresses your key concern and adds meaningful signal, increase your confidence score. "
+            "If the answer is vague, incomplete, or reveals a new problem, keep your score similar or lower it. "
+            "Do not change your score dramatically without a clear reason from the answer."
+        )
     return "\n".join(lines)
 
 
@@ -88,19 +96,19 @@ async def _get_search_context_and_sources(
 
 
 async def run_agent(
-    spec: AgentSpec, idea: str, history: list[ClarifyingQA]
+    spec: AgentSpec, idea: str, history: list[ClarifyingQA], prior_confidence: int | None = None
 ) -> AgentResult:
     search_context, sources = await _get_search_context_and_sources(spec.domain, idea)
-    prompt = f"{spec.system_prompt}\n\nStartup idea: {idea}{search_context}{_render_history(history)}"
+    prompt = f"{spec.system_prompt}\n\nStartup idea: {idea}{search_context}{_render_history(history, prior_confidence)}"
     out = await generate_json(prompt, _AgentLLMOutput)
     return AgentResult(domain=spec.domain, name=spec.name, sources=sources, **out.model_dump())
 
 
 async def run_single_agent(
-    domain: AgentDomain, idea: str, history: list[ClarifyingQA]
+    domain: AgentDomain, idea: str, history: list[ClarifyingQA], prior_confidence: int | None = None
 ) -> AgentResult:
     spec = _DOMAIN_TO_SPEC[domain]
-    return await run_agent(spec, idea, history)
+    return await run_agent(spec, idea, history, prior_confidence)
 
 
 async def run_all_agents_parallel(

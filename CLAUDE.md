@@ -19,6 +19,10 @@ A startup idea validator powered by 3 parallel AI agents. Users describe a start
 **Nice-to-have:** agent disagreement highlight, confidence delta after clarifying answer.
 **Out of scope:** multi-round debates, real financial modeling, external data integrations.
 
+## Naming Convention
+
+**When the user says "frontend", they mean `project-code/` — NOT `frontend/`.** Always target `/lahacks2026/project-code/` for any React, Vite, or UI work.
+
 ## Project Structure
 
 This is a full-stack web app with a React frontend and a Python backend:

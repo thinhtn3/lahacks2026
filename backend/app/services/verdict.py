@@ -19,16 +19,27 @@ You must:
 - Weigh all four agent evaluations fairly
 - Identify the top 2-3 cross-cutting risks
 - Provide 2-3 actionable suggestions for the founder
-- Write a 2-3 sentence summary of the overall opportunity
 - Render a verdict: "Invest" (strong across all dimensions), "Needs Work" (promising but clear gaps), or "Pass" (fundamental problems)
 - Produce an overall confidence score (0–100) reflecting how confident you are this startup can succeed
+- Write a compelling one-sentence takeaway for the founder
+- Write a 2-3 sentence summary of the overall opportunity
+- List 2-3 genuine strengths of the idea
+- Write one sharp, memorable insight about the startup's key competitive edge or biggest bet
+- List 2-3 concrete ways the founder can strengthen the idea
+- List 3-5 specific next steps for the founder to take
 
 Respond ONLY with a JSON object with these exact fields:
 {
   "verdict": "Invest" | "Pass" | "Needs Work",
   "confidence_score": <integer 0-100>,
   "top_risks": ["<risk 1>", "<risk 2>", "<risk 3>"],
-  "suggestions": ["<suggestion 1>", "<suggestion 2>", "<suggestion 3>"]
+  "suggestions": ["<suggestion 1>", "<suggestion 2>", "<suggestion 3>"],
+  "takeaway": "<one compelling sentence for the founder>",
+  "summary": "<2-3 sentences on the overall opportunity>",
+  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "insight": "<one sharp insight about key edge or biggest bet>",
+  "strengthen": ["<how to strengthen 1>", "<how to strengthen 2>", "<how to strengthen 3>"],
+  "next_steps": ["<next step 1>", "<next step 2>", "<next step 3>", "<next step 4>"]
 }
 Do not include any text outside the JSON object."""
 
@@ -38,6 +49,12 @@ class _VerdictLLMOutput(BaseModel):
     confidence_score: int
     top_risks: list[str]
     suggestions: list[str]
+    takeaway: str
+    summary: str
+    strengths: list[str]
+    insight: str
+    strengthen: list[str]
+    next_steps: list[str]
 
 
 def _render_agents(agents: list[AgentResult]) -> str:

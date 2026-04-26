@@ -48,3 +48,6 @@ ehthumbs.db
 # Misc
 *.sqlite
 *.db
+
+# Nested workspace repo (has its own .git, cannot be tracked as a submodule)
+project-code/.workspace/

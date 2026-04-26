@@ -65,3 +65,9 @@ class VerdictResponse(BaseModel):
     confidence_score: int
     top_risks: list[str]
     suggestions: list[str]
+    takeaway: str
+    summary: str
+    strengths: list[str]
+    insight: str
+    strengthen: list[str]
+    next_steps: list[str]

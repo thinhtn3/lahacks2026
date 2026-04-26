@@ -23,15 +23,17 @@ interface Props {
 const ease = [0.22, 1, 0.36, 1] as const;
 
 /** Match agent card motion (below): lines must not read “through” where the card is still invisible. */
-const CARD_BASE_DELAY = 0.4;
-const CARD_STAGGER = 0.18;
-const CARD_IN_DURATION = 0.8;
+const CARD_BASE_DELAY = 0.28;
+const CARD_STAGGER = 0.12;
+const CARD_IN_DURATION = 0.55;
 
 const ALL_CARDS_IN_AT =
   CARD_BASE_DELAY + (AGENTS.length - 1) * CARD_STAGGER + CARD_IN_DURATION;
+/** Scales all hub→agent line entrance timing (delays, fades, pulse). */
+const LINE_TIME_SCALE = 3;
 /** Wait until every card has landed, then hold — then start spokes in order. */
-const LINES_PAUSE_AFTER_ALL_CARDS = 1.1;
-const LINE_SPOKE_STAGGER = 0.14;
+const LINES_PAUSE_AFTER_ALL_CARDS = 1.1 * LINE_TIME_SCALE;
+const LINE_SPOKE_STAGGER = 0.14 * LINE_TIME_SCALE;
 
 function lineEntranceDelay(agentIndex: number) {
   return ALL_CARDS_IN_AT + LINES_PAUSE_AFTER_ALL_CARDS + agentIndex * LINE_SPOKE_STAGGER;
@@ -162,7 +164,7 @@ export const AgentDiagram = ({
                   vectorEffect="non-scaling-stroke"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: inConflict ? 0.45 : isBusy ? 0.4 : 0.22 }}
-                  transition={{ duration: 0.5, delay: lineEntranceDelay(i), ease }}
+                  transition={{ duration: 0.5 * LINE_TIME_SCALE, delay: lineEntranceDelay(i), ease }}
                 />
                 {/* Main line — only opacity animated, never pathLength */}
                 <motion.path
@@ -184,12 +186,12 @@ export const AgentDiagram = ({
                   transition={{
                     opacity: inConflict || isBusy
                       ? {
-                          duration: 1.8,
+                          duration: 1.8 * LINE_TIME_SCALE,
                           repeat: Infinity,
                           ease: "easeInOut",
-                          delay: lineEntranceDelay(i) + 0.1,
+                          delay: lineEntranceDelay(i) + 0.1 * LINE_TIME_SCALE,
                         }
-                      : { duration: 0.55, delay: lineEntranceDelay(i), ease },
+                      : { duration: 0.55 * LINE_TIME_SCALE, delay: lineEntranceDelay(i), ease },
                   }}
                 />
               </g>
@@ -215,7 +217,7 @@ export const AgentDiagram = ({
               }}
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.5, delay: lineEntranceDelay(lineIdx) + 0.1, ease }}
+              transition={{ duration: 0.5 * LINE_TIME_SCALE, delay: lineEntranceDelay(lineIdx) + 0.1 * LINE_TIME_SCALE, ease }}
             >
               <div className="flex items-center gap-1.5 rounded-full bg-background/90 backdrop-blur px-2 py-0.5 shadow-soft border border-destructive/30">
                 <AlertTriangle className="h-3 w-3 text-destructive" />

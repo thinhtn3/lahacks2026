@@ -29,7 +29,7 @@ export const Concept = ({ onEnter }: Props) => {
   const y2 = useTransform(scrollYProgress, [0, 1], [60, -60]);
 
   return (
-    <div ref={ref} className="relative bg-background">
+    <div ref={ref} className="relative">
       {/* Statements */}
       <section className="relative py-40 md:py-56">
         <div className="container max-w-3xl">

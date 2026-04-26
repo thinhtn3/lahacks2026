@@ -16,6 +16,18 @@ interface Props {
   input: IdeaInput;
   onBack: () => void;
   onComplete: (scores: Record<AgentId, number>, agents: BackendAgentResult[], history: BackendClarifyingQA[]) => void;
+  onViewReport?: () => void;
+}
+
+const EVAL_STATE_KEY = "venture-eval-state";
+
+function loadStoredEval() {
+  try {
+    const raw = localStorage.getItem(EVAL_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 
 const initialState = (): Record<AgentId, AgentState> => ({
@@ -27,19 +39,30 @@ const initialState = (): Record<AgentId, AgentState> => ({
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-export const Evaluation = ({ input, onBack, onComplete }: Props) => {
-  const [agentStates, setAgentStates] = useState<Record<AgentId, AgentState>>(initialState());
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+export const Evaluation = ({ input, onBack, onComplete, onViewReport }: Props) => {
+  const storedRef = useRef(loadStoredEval());
+  const wasRestored = storedRef.current !== null;
+
+  const [agentStates, setAgentStates] = useState<Record<AgentId, AgentState>>(
+    () => storedRef.current?.agentStates ?? initialState()
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => storedRef.current?.messages ?? []
+  );
   const [activeAgent, setActiveAgent] = useState<AgentId | "orchestrator" | null>(null);
   const [clarification, setClarification] = useState<ClarificationRequest | null>(null);
   const [dismissedClarification, setDismissedClarification] = useState<ClarificationRequest | null>(null);
-  const [phase, setPhase] = useState<"intro" | "panel" | "awaiting" | "reeval" | "done">("intro");
+  const [phase, setPhase] = useState<"intro" | "panel" | "awaiting" | "reeval" | "done">(
+    () => storedRef.current ? "done" : "intro"
+  );
   const [conflicts, setConflicts] = useState<Array<[AgentId, AgentId]>>([]);
   const queueRef = useRef<AgentTurn[]>([]);
-  const completedRef = useRef(false);
+  const completedRef = useRef(wasRestored); // already completed if restored
   const streamingDoneRef = useRef(false);
   const agentStatesRef = useRef(agentStates);
   agentStatesRef.current = agentStates;
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const backendAgentsRef = useRef<{ agents: BackendAgentResult[]; history: BackendClarifyingQA[] }>({ agents: [], history: [] });
   const pendingDomainsRef = useRef<BackendDomain[]>([]);
   const [queueVersion, setQueueVersion] = useState(0);
@@ -47,8 +70,10 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
   const [isViewingSummary, setIsViewingSummary] = useState(false);
 
   const [sourcesByAgent, setSourcesByAgent] = useState<Record<AgentId, AgentSource[]>>(
-    { problem: [], market: [], business: [], tech: [] }
+    () => storedRef.current?.sourcesByAgent ?? { problem: [], market: [], business: [], tech: [] }
   );
+  const sourcesByAgentRef = useRef(sourcesByAgent);
+  sourcesByAgentRef.current = sourcesByAgent;
 
   const [panelWidth, setPanelWidth] = useState(400);
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -84,8 +109,9 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
     return map;
   }, [messages]);
 
-  // initial sequence
+  // initial sequence — skip entirely when restoring from history
   useEffect(() => {
+    if (wasRestored) return;
     const t1 = setTimeout(() => {
       setAgentStates((s) => {
         const next = { ...s };
@@ -98,8 +124,9 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
       backendAgentsRef.current = { agents: [], history: [] };
       pendingDomainsRef.current = [];
       setStreamReady(false);
-      setPhase("panel");
       const idea = input.pitch || Object.values(input).filter(Boolean).join("\n");
+      setMessages([{ id: "user-pitch", agentId: "user", text: idea, timestamp: Date.now() }]);
+      setPhase("panel");
       const callbacks: StreamCallbacks = {
         onTurn: (turn) => {
           queueRef.current = [...queueRef.current, turn];
@@ -277,12 +304,20 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
       acc[k] = snap[k].score ?? 50;
       return acc;
     }, {} as Record<AgentId, number>);
-    setAgentStates((s) => {
-      const next = { ...s };
-      for (const k of Object.keys(next) as AgentId[]) next[k] = { ...next[k], confidence: scores[k], conflict: false };
-      return next;
-    });
+    const pinnedStates = { ...snap } as Record<AgentId, AgentState>;
+    for (const k of Object.keys(pinnedStates) as AgentId[]) {
+      pinnedStates[k] = { ...pinnedStates[k], confidence: scores[k], conflict: false };
+    }
+    setAgentStates(pinnedStates);
     setConflicts([]);
+    // Persist to localStorage so the transcript survives navigation
+    try {
+      localStorage.setItem(EVAL_STATE_KEY, JSON.stringify({
+        messages: messagesRef.current,
+        agentStates: pinnedStates,
+        sourcesByAgent: sourcesByAgentRef.current,
+      }));
+    } catch { /* storage full or unavailable */ }
   }, [phase]); // agentStates intentionally excluded — read via ref
 
   const handleViewSummary = async () => {
@@ -310,6 +345,13 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
     return spoken.reduce((acc, a) => acc + agentStates[a.id].confidence, 0) / spoken.length;
   }, [agentStates, phase]);
 
+  const effectiveConflicts = useMemo(() => {
+    const scoreBased: Array<[AgentId, AgentId]> = (Object.keys(agentStates) as AgentId[])
+      .filter((k) => agentStates[k].score !== null && agentStates[k].score! < 50)
+      .map((k) => [k, k] as [AgentId, AgentId]);
+    return [...conflicts, ...scoreBased];
+  }, [conflicts, agentStates]);
+
   const centralResolved = phase === "done";
   const isPanelSpeaking = phase === "panel" || phase === "reeval";
   const phaseLabel =
@@ -323,32 +365,34 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
   const activeClarification = clarification ?? dismissedClarification;
 
   return (
-    <div className="h-screen overflow-hidden flex flex-col relative bg-background">
+    <div className="h-screen overflow-hidden flex flex-col relative" style={{ background: "linear-gradient(135deg, #f6f6f9 0%, #fafafa 50%, #f4f6fb 100%)" }}>
       <header className="flex-shrink-0 relative z-10 flex items-center justify-between px-8 md:px-12 py-4">
-        <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+        <button onClick={() => { localStorage.removeItem(EVAL_STATE_KEY); onBack(); }} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
           <span>Edit brief</span>
         </button>
         <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
           {phaseLabel}<span className="loading-dots ml-1" />
         </div>
-        <div className="text-xs text-muted-foreground hidden md:block">
-          {input.startupName || "Untitled"}
-        </div>
+        {input.startupName && (
+          <div className="text-xs text-muted-foreground hidden md:block">
+            {input.startupName}
+          </div>
+        )}
       </header>
       <main
         className={cn(
-          "relative z-10 flex-1 min-h-0 grid px-8 md:px-12 pt-2 pb-6",
+          "relative z-10 flex-1 min-h-0 grid items-stretch overflow-hidden px-8 md:px-12 pt-2 pb-6",
           transcriptCollapsed
-            ? "lg:grid-cols-[1fr]"
-            : "lg:grid-cols-[1fr_auto] lg:gap-10",
+            ? "grid-cols-1"
+            : "grid-cols-1 max-lg:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] lg:grid-cols-[55%_45%] lg:gap-6",
         )}
         style={{ transitionTimingFunction: "cubic-bezier(0.22, 1, 0.36, 1)" }}
       >
         <div className="flex flex-col gap-4 min-h-0">
           <div className="flex-shrink-0">
             <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">The Panel</div>
-            <h2 className="font-display text-2xl md:text-3xl mt-1 leading-tight">
+            <h2 className="font-display text-2xl md:text-3xl mt-1 leading-tight font-bold">
               Four perspectives, in conversation.
             </h2>
           </div>
@@ -361,7 +405,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
               sourcesByAgent={sourcesByAgent}
               centralConfidence={centralConfidence}
               centralResolved={centralResolved}
-              conflicts={conflicts}
+              conflicts={effectiveConflicts}
               appearedAt={0}
             />
           </div>
@@ -375,8 +419,7 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 24 }}
               transition={{ duration: 0.7, ease }}
-              className="relative min-h-0"
-              style={{ width: panelWidth, overflow: "hidden" }}
+              className="relative flex min-h-0 min-w-0 flex-col self-stretch overflow-hidden h-full"
             >
               <div
                 onMouseDown={handleDragStart}
@@ -406,10 +449,10 @@ export const Evaluation = ({ input, onBack, onComplete }: Props) => {
                   <Button
                     size="lg"
                     variant="hero"
-                    onClick={handleViewSummary}
+                    onClick={wasRestored && onViewReport ? onViewReport : handleViewSummary}
                     disabled={isViewingSummary}
                   >
-                    {isViewingSummary ? "Preparing summary..." : "View summary →"}
+                    {wasRestored && onViewReport ? "Back to summary →" : isViewingSummary ? "Preparing summary..." : "View summary →"}
                   </Button>
                 ) : undefined}
               />

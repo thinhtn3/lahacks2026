@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowUp } from "lucide-react";
+import Lenis from "lenis";
 import { AGENTS, ChatMessage } from "@/lib/venture-types";
 
 interface Props {
@@ -16,12 +17,56 @@ interface Props {
 const agentMap = Object.fromEntries(AGENTS.map((a) => [a.id, a]));
 
 export const PanelChat = ({ messages, onSend, disabled, disabledPlaceholder, headerAction, transcriptAction, footerAction }: Props) => {
+  const panelRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const lenisRef = useRef<Lenis | null>(null);
   const [text, setText] = useState("");
 
-  // Auto-scroll on new message
+  // Scoped Lenis instance for smooth scroll inside this panel
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    const wrapper = scrollRef.current;
+    const content = contentRef.current;
+    if (!wrapper || !content) return;
+
+    const lenis = new Lenis({ wrapper, content, autoRaf: false });
+    lenisRef.current = lenis;
+
+    let rafId: number;
+    function raf(time: number) {
+      lenis.raf(time);
+      rafId = requestAnimationFrame(raf);
+    }
+    rafId = requestAnimationFrame(raf);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      lenis.destroy();
+      lenisRef.current = null;
+    };
+  }, []);
+
+  // Route header/footer wheel events into the scoped Lenis
+  useEffect(() => {
+    const root = panelRef.current;
+    if (!root) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      if (e.composedPath().includes(scroller)) return;
+      e.preventDefault();
+      const lenis = lenisRef.current;
+      if (lenis) lenis.scrollTo((lenis as any).targetScroll + e.deltaY);
+    };
+    root.addEventListener("wheel", onWheel, { passive: false });
+    return () => root.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Auto-scroll to bottom on new message
+  useEffect(() => {
+    const lenis = lenisRef.current;
+    if (lenis) lenis.scrollTo(Number.POSITIVE_INFINITY, { immediate: true });
   }, [messages.length]);
 
   const submit = () => {
@@ -31,11 +76,28 @@ export const PanelChat = ({ messages, onSend, disabled, disabledPlaceholder, hea
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between pb-5 border-b border-border">
+    <div
+      ref={panelRef}
+      className="flex h-full min-h-0 w-full min-w-0 max-h-full flex-col rounded-2xl px-5 pt-5 pb-4"
+      style={{
+        background: "hsl(240 8% 91%)",
+        border: "1px solid hsl(240 6% 84%)",
+        boxShadow: "0 2px 12px hsl(240 6% 70% / 0.18), inset 0 1px 0 hsl(0 0% 100% / 0.5)",
+      }}
+    >
+      {/* Header */}
+      <div
+        className="flex flex-shrink-0 items-center justify-between pb-5"
+        style={{ borderBottom: "1px solid hsl(240 6% 84%)" }}
+      >
         <div>
-          <div className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground">Transcript</div>
-          <div className="font-display text-xl mt-1.5">Live commentary</div>
+          <div
+            className="text-[11px] uppercase tracking-[0.24em] font-semibold"
+            style={{ color: "hsl(215 60% 55%)" }}
+          >
+            Transcript
+          </div>
+          <div className="font-display text-xl mt-1.5 font-bold text-foreground">Live commentary</div>
         </div>
         <div className="flex items-center gap-3">
           {headerAction}
@@ -46,58 +108,71 @@ export const PanelChat = ({ messages, onSend, disabled, disabledPlaceholder, hea
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto scrollbar-thin py-6 space-y-7 pr-1">
-        <AnimatePresence initial={false}>
-          {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground/70 italic font-light">
-              The panel is gathering its thoughts…
-            </p>
-          )}
-          {messages.map((m) => {
-            const isUser = m.agentId === "user";
-            const isOrch = m.agentId === "orchestrator";
-            const agent = !isUser && !isOrch ? agentMap[m.agentId] : null;
-            const label = isUser ? "You" : isOrch ? "Panel" : agent?.name;
-            const sub = isUser ? "Founder" : isOrch ? "Moderator" : agent?.role;
+      {/* Scroll wrapper — Lenis manages; overflow-hidden required */}
+      <div
+        ref={scrollRef}
+        data-lenis-prevent
+        className="min-h-0 min-w-0 flex-1 basis-0 overflow-hidden"
+      >
+        <div ref={contentRef} className="py-6 pr-1 space-y-7">
+          <AnimatePresence initial={false}>
+            {messages.length === 0 && (
+              <p className="text-sm text-muted-foreground/70 italic font-light">
+                The panel is gathering its thoughts…
+              </p>
+            )}
+            {messages.map((m) => {
+              const isUser = m.agentId === "user";
+              const isOrch = m.agentId === "orchestrator";
+              const agent = !isUser && !isOrch ? agentMap[m.agentId] : null;
+              const label = isUser ? "You" : isOrch ? "Panel" : agent?.name;
 
-            return (
+              return (
+                <motion.div
+                  key={m.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <div
+                    className={`font-display text-lg font-bold tracking-tight ${isUser ? "italic text-muted-foreground" : ""}`}
+                    style={agent ? { color: `hsl(var(${agent.hslVar}))` } : undefined}
+                  >
+                    {label}
+                  </div>
+                  <p className={`mt-1 ml-3 text-[17px] leading-relaxed font-light whitespace-pre-wrap ${isUser ? "text-muted-foreground" : "text-foreground/90"}`}>
+                    {m.text}
+                  </p>
+                </motion.div>
+              );
+            })}
+            {transcriptAction && (
               <motion.div
-                key={m.id}
+                key="transcript-action"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+                className="pt-1"
               >
-                <div className="text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-                  {sub}
-                </div>
-                <div className={`mt-1 font-display text-sm ${isUser ? "italic text-muted-foreground" : "text-foreground"}`}>
-                  {label}
-                </div>
-                <p className={`mt-2 text-[15px] leading-relaxed font-light whitespace-pre-wrap ${isUser ? "text-muted-foreground" : "text-foreground/90"}`}>
-                  {m.text}
-                </p>
+                {transcriptAction}
               </motion.div>
-            );
-          })}
-          {transcriptAction && (
-            <motion.div
-              key="transcript-action"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
-              className="pt-1"
-            >
-              {transcriptAction}
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
-      <div className="border-t border-border pt-4">
+      {/* Footer */}
+      <div
+        className="flex flex-shrink-0 pt-4 w-full"
+        style={{ borderTop: "1px solid hsl(240 6% 84%)" }}
+      >
         {footerAction ? (
-          <div className="flex justify-end">{footerAction}</div>
+          <div className="flex justify-end w-full">{footerAction}</div>
         ) : (
-          <div className="flex items-center gap-2 rounded-full bg-secondary px-4 py-1.5 transition-colors focus-within:bg-secondary/70">
+          <div
+            className="flex w-full items-center gap-2 rounded-full px-4 py-1.5 transition-colors focus-within:brightness-95"
+            style={{ background: "hsl(0 0% 100% / 0.6)", border: "1px solid hsl(240 6% 82%)" }}
+          >
             <input
               value={text}
               onChange={(e) => setText(e.target.value)}

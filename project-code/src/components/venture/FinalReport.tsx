@@ -2,10 +2,11 @@ import { motion } from "framer-motion";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { FinalReport as FR } from "@/lib/venture-types";
-import { Download, Pencil, RotateCcw } from "lucide-react";
+import { ArrowLeft, Download, Pencil, RotateCcw } from "lucide-react";
 
 interface Props {
   report: FR;
+  onBack: () => void;
   onRestart: () => void;
   onEdit: () => void;
   onExport: () => void;
@@ -13,18 +14,21 @@ interface Props {
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-export const FinalReport = ({ report, onRestart, onEdit, onExport }: Props) => {
+export const FinalReport = ({ report, onBack, onRestart, onEdit, onExport }: Props) => {
   return (
     <div className="min-h-screen relative bg-background">
       <header className="relative z-10 px-8 md:px-12 py-7 flex items-center justify-between">
-        <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">Evaluation</div>
+        <button onClick={onBack} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to panel</span>
+        </button>
         <div className="text-xs text-muted-foreground">Report · v1</div>
       </header>
 
-      <main className="relative z-10 container max-w-2xl py-16 pb-32">
+      <main className="relative z-10 container max-w-4xl py-16 pb-32">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, ease }}>
           <div className="text-center mb-16">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground mb-12">
+            <p className="text-xs uppercase tracking-[0.22em] text-muted-foreground mb-12">
               You're early — this feedback is meant to help you refine.
             </p>
 
@@ -32,26 +36,20 @@ export const FinalReport = ({ report, onRestart, onEdit, onExport }: Props) => {
               <ScoreRing value={report.overallScore} />
             </div>
 
-            <p className="font-display text-2xl md:text-3xl italic leading-snug text-foreground/90 max-w-xl mx-auto">
+            <p className="font-display text-3xl md:text-4xl italic leading-snug text-foreground/90 max-w-xl mx-auto">
               {report.takeaway}
             </p>
           </div>
 
           <Accordion type="multiple" defaultValue={["summary"]} className="space-y-1">
             <ReportSection value="summary" title="Summary">
-              <p className="text-foreground/85 leading-relaxed font-light">{report.summary}</p>
+              <p className="text-lg text-foreground/85 leading-relaxed font-light">{report.summary}</p>
             </ReportSection>
             <ReportSection value="working" title="What's Working">
               <BulletList items={report.strengths} />
             </ReportSection>
             <ReportSection value="needs" title="What Needs Improvement">
               <BulletList items={report.risks} />
-            </ReportSection>
-            <ReportSection value="insight" title="Key Insight">
-              <p className="font-display text-xl italic leading-snug text-foreground/85">{report.insight}</p>
-            </ReportSection>
-            <ReportSection value="strengthen" title="How to Strengthen">
-              <BulletList items={report.strengthen} />
             </ReportSection>
             <ReportSection value="next" title="Next Steps">
               <BulletList items={report.nextSteps} />
@@ -107,8 +105,8 @@ const ScoreRing = ({ value }: { value: number }) => {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-display text-5xl tabular-nums text-foreground">{value}</span>
-        <span className="text-[10px] uppercase tracking-[0.24em] text-muted-foreground mt-1">/ 100</span>
+        <span className="font-display text-6xl tabular-nums text-foreground">{value}</span>
+        <span className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mt-1">/ 100</span>
       </div>
     </div>
   );
@@ -117,7 +115,7 @@ const ScoreRing = ({ value }: { value: number }) => {
 const ReportSection = ({ value, title, children }: { value: string; title: string; children: React.ReactNode }) => (
   <AccordionItem value={value} className="border-b border-border last:border-b-0 border-t-0">
     <AccordionTrigger className="hover:no-underline py-5 group">
-      <span className="font-display text-xl text-foreground text-left">{title}</span>
+      <span className="font-display text-3xl text-foreground text-left">{title}</span>
     </AccordionTrigger>
     <AccordionContent className="pb-6 pt-1">{children}</AccordionContent>
   </AccordionItem>
@@ -126,8 +124,8 @@ const ReportSection = ({ value, title, children }: { value: string; title: strin
 const BulletList = ({ items }: { items: string[] }) => (
   <ul className="space-y-3">
     {items.map((it, i) => (
-      <li key={i} className="flex gap-4 text-foreground/85 leading-relaxed font-light">
-        <span className="text-xs text-muted-foreground tabular-nums pt-1.5 w-6 shrink-0">
+      <li key={i} className="flex gap-4 text-lg text-foreground/85 leading-relaxed font-light">
+        <span className="text-sm text-muted-foreground tabular-nums pt-1.5 w-6 shrink-0">
           {String(i + 1).padStart(2, "0")}
         </span>
         <span>{it}</span>

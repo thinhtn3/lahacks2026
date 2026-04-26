@@ -4,6 +4,12 @@ from app.config import settings
 
 _client: AsyncTavilyClient | None = None
 
+_MOCK_SOURCES: list[dict] = [
+    {"title": "[Mock] Sample Market Report 2026", "url": "https://example.com/mock-market"},
+    {"title": "[Mock] Competitor Landscape Overview", "url": "https://example.com/mock-competitors"},
+    {"title": "[Mock] Industry Trends & Benchmarks", "url": "https://example.com/mock-trends"},
+]
+
 
 def get_client() -> AsyncTavilyClient:
     global _client
@@ -24,6 +30,8 @@ def _format(results: list[dict], header: str) -> tuple[str, list[dict]]:
 
 
 async def market_search(query: str) -> tuple[str, list[dict]]:
+    if settings.mock_llm:
+        return "Market research (mock): placeholder data for dev.", _MOCK_SOURCES[:2]
     try:
         response = await get_client().search(query=query, search_depth="advanced", max_results=5)
         return _format(response.get("results", []), "Market research (web):")
@@ -32,6 +40,8 @@ async def market_search(query: str) -> tuple[str, list[dict]]:
 
 
 async def deep_research(query: str) -> tuple[str, list[dict]]:
+    if settings.mock_llm:
+        return "Competitor research (mock): placeholder data for dev.", _MOCK_SOURCES
     try:
         response = await get_client().search(query=query, search_depth="advanced", max_results=10)
         return _format(response.get("results", []), "Competitor research (web):")

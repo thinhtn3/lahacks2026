@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Hero } from "@/components/venture/Hero";
 import { Concept } from "@/components/venture/Concept";
@@ -14,18 +14,42 @@ import { toast } from "sonner";
 
 type View = "intro" | "concept" | "form" | "eval" | "report";
 
+const EVAL_STATE_KEY = "venture-eval-state";
+const APP_STATE_KEY  = "venture-app-state";
+
 const empty: IdeaInput = {
   startupName: "", industry: "", pitch: "", targetUser: "", problem: "",
   alternatives: "", businessModel: "", technical: "",
 };
 
+function loadAppState() {
+  try {
+    const raw = localStorage.getItem(APP_STATE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 const ease = [0.22, 1, 0.36, 1] as const;
 
 const Index = () => {
-  const [view, setView] = useState<View>("intro");
+  const [view, setView] = useState<View>(() => {
+    const s = loadAppState();
+    return (s?.view === "eval" || s?.view === "report") ? s.view : "intro";
+  });
   const [transitioning, setTransitioning] = useState(false);
-  const [idea, setIdea] = useState<IdeaInput>(empty);
-  const [report, setReport] = useState<FR | null>(null);
+  const [idea, setIdea] = useState<IdeaInput>(() => loadAppState()?.idea ?? empty);
+  const [report, setReport] = useState<FR | null>(() => loadAppState()?.report ?? null);
+
+  // Persist view + report + idea whenever they change (only for eval/report states)
+  useEffect(() => {
+    if (view === "eval" || view === "report") {
+      try {
+        localStorage.setItem(APP_STATE_KEY, JSON.stringify({ view, report, idea }));
+      } catch { /* storage full */ }
+    }
+  }, [view, report, idea]);
 
   const enterApp = () => {
     setTransitioning(true);
@@ -43,8 +67,8 @@ const Index = () => {
   const handleComplete = useCallback(async (scores: Record<AgentId, number>, agents: BackendAgentResult[], history: BackendClarifyingQA[]) => {
     const ideaText = idea.pitch || Object.values(idea).filter(Boolean).join("\n");
     try {
-      const report = await fetchVerdict(ideaText, agents, history);
-      setReport(report);
+      const r = await fetchVerdict(ideaText, agents, history);
+      setReport(r);
       setView("report");
     } catch (err) {
       console.error("Verdict failed, falling back to local:", err);
@@ -65,7 +89,13 @@ const Index = () => {
     toast.success("Report exported");
   };
 
+  const clearStorage = () => {
+    localStorage.removeItem(EVAL_STATE_KEY);
+    localStorage.removeItem(APP_STATE_KEY);
+  };
+
   const restart = () => {
+    clearStorage();
     setIdea(empty);
     setReport(null);
     setView("intro");
@@ -102,7 +132,7 @@ const Index = () => {
             <IdeaForm
               value={idea}
               onChange={setIdea}
-              onSubmit={() => setView("eval")}
+              onSubmit={() => { clearStorage(); setView("eval"); }}
               onBack={() => { setView("intro"); window.scrollTo({ top: 0, behavior: "auto" }); }}
             />
           </motion.div>
@@ -116,7 +146,12 @@ const Index = () => {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.7, ease }}
           >
-            <Evaluation input={idea} onBack={() => setView("form")} onComplete={handleComplete} />
+            <Evaluation
+              input={idea}
+              onBack={() => setView("form")}
+              onComplete={handleComplete}
+              onViewReport={report ? () => setView("report") : undefined}
+            />
           </motion.div>
         )}
 
@@ -130,8 +165,9 @@ const Index = () => {
           >
             <FinalReport
               report={report}
+              onBack={() => setView("eval")}
               onRestart={restart}
-              onEdit={() => setView("form")}
+              onEdit={() => { clearStorage(); setView("form"); }}
               onExport={handleExport}
             />
           </motion.div>

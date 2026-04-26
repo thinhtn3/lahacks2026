@@ -5,7 +5,7 @@ load_dotenv()
 
 
 class Settings:
-    gemini_api_key: str = os.environ["GEMINI_API_KEY"]
+    deepseek_api_key: str = os.environ["DEEPSEEK_API_KEY"]
 
 
 settings = Settings()

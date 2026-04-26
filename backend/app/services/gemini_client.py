@@ -1,25 +1,27 @@
-from google import genai
-from google.genai import types
+import json
+from openai import AsyncOpenAI
+from pydantic import BaseModel
 from app.config import settings
 
-_client: genai.Client | None = None
+_client: AsyncOpenAI | None = None
 
 
-def get_client() -> genai.Client:
+def get_client() -> AsyncOpenAI:
     global _client
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        _client = AsyncOpenAI(
+            api_key=settings.deepseek_api_key,
+            base_url="https://api.deepseek.com",
+        )
     return _client
 
 
-async def generate_json(prompt: str, schema: type) -> dict:
+async def generate_json(prompt: str, schema: type) -> BaseModel:
     client = get_client()
-    response = await client.aio.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=schema,
-        ),
+    response = await client.chat.completions.create(
+        model="deepseek-v4-flash",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"},
     )
-    return response.parsed
+    data = json.loads(response.choices[0].message.content)
+    return schema(**data)

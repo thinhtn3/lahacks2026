@@ -105,7 +105,7 @@ const ScoreRing = ({ value }: { value: number }) => {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-display text-6xl tabular-nums text-foreground">{value}</span>
+        <span className="font-display text-6xl tabular-nums text-foreground leading-none tracking-tight">{value}</span>
         <span className="text-[11px] uppercase tracking-[0.24em] text-muted-foreground mt-1">/ 100</span>
       </div>
     </div>

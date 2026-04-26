@@ -563,7 +563,7 @@ const CentralRing = ({
         <div className="font-display text-base mt-1.5 text-foreground italic">
           The Panel
         </div>
-        <div className="text-[10px] tabular-nums mt-1.5 text-muted-foreground/80">
+        <div className="text-2xl tabular-nums font-display mt-1.5 text-foreground">
           {Math.round(pct)}%
         </div>
         {active && (

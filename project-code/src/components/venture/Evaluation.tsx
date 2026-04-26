@@ -15,6 +15,7 @@ import { toast } from "sonner";
 interface Props {
   input: IdeaInput;
   onBack: () => void;
+  onRestart: () => void;
   onComplete: (scores: Record<AgentId, number>, agents: BackendAgentResult[], history: BackendClarifyingQA[]) => void;
   onViewReport?: () => void;
 }
@@ -39,7 +40,7 @@ const initialState = (): Record<AgentId, AgentState> => ({
 
 const ease = [0.22, 1, 0.36, 1] as const;
 
-export const Evaluation = ({ input, onBack, onComplete, onViewReport }: Props) => {
+export const Evaluation = ({ input, onBack, onRestart, onComplete, onViewReport }: Props) => {
   const storedRef = useRef(loadStoredEval());
   const wasRestored = storedRef.current !== null;
 
@@ -374,11 +375,12 @@ export const Evaluation = ({ input, onBack, onComplete, onViewReport }: Props) =
         <div className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
           {phaseLabel}<span className="loading-dots ml-1" />
         </div>
-        {input.startupName && (
-          <div className="text-xs text-muted-foreground hidden md:block">
-            {input.startupName}
-          </div>
-        )}
+        <button
+          onClick={() => { localStorage.removeItem(EVAL_STATE_KEY); onRestart(); }}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          New pitch
+        </button>
       </header>
       <main
         className={cn(

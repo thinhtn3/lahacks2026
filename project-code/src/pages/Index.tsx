@@ -149,6 +149,7 @@ const Index = () => {
             <Evaluation
               input={idea}
               onBack={() => setView("form")}
+              onRestart={restart}
               onComplete={handleComplete}
               onViewReport={report ? () => setView("report") : undefined}
             />

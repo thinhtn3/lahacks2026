@@ -1,9 +1,31 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL ?? ''
+
+const AGENT_STUBS = [
+  { domain: 'problem_user',         name: 'Problem & User Agent',                      status: 'Evaluating problem & user fit…',        _loading: true },
+  { domain: 'market_competition',   name: 'Competition, Differentiation & Market Agent', status: 'Web searching market trends & competitors…', _loading: true },
+  { domain: 'business_distribution',name: 'Business Model & Distribution Agent',         status: 'Web searching pricing benchmarks…',         _loading: true },
+  { domain: 'tech_product',         name: 'Technical Feasibility & Product Agent',       status: 'Assessing technical feasibility…',       _loading: true },
+]
 
 function AgentCard({ agent, isActive }) {
+  if (agent._loading) {
+    return (
+      <div className="agent-card agent-card--loading">
+        <div className="agent-card-header">
+          <h3>{agent.name}</h3>
+          <span className="confidence confidence--muted">—</span>
+        </div>
+        <div className="confidence-bar">
+          <div className="confidence-bar-fill confidence-bar--indeterminate" />
+        </div>
+        <p className="agent-status-text">{agent.status}</p>
+      </div>
+    )
+  }
+
   return (
     <div className={`agent-card${isActive ? ' agent-card--active' : ''}`}>
       <div className="agent-card-header">
@@ -17,6 +39,18 @@ function AgentCard({ agent, isActive }) {
         {agent.insights.map((insight, i) => <li key={i}>{insight}</li>)}
       </ul>
       <div className="key-risk"><strong>Key risk:</strong> {agent.key_risk}</div>
+      {agent.sources && agent.sources.length > 0 && (
+        <div className="agent-sources">
+          <span className="agent-sources-label">Sources</span>
+          <ul className="agent-sources-list">
+            {agent.sources.map((s, i) => (
+              <li key={i}>
+                <a href={s.url} target="_blank" rel="noopener noreferrer">{s.title}</a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
@@ -38,6 +72,13 @@ function App() {
   const [delivery, setDelivery] = useState(null)
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
+  const verdictRef = useRef(null)
+
+  useEffect(() => {
+    if (phase === 'done' && verdict) {
+      verdictRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [phase, verdict])
 
   const isbusy = phase === 'analyzing' || phase === 'verdict-loading' || transcribing
 
@@ -45,23 +86,47 @@ function App() {
     e.preventDefault()
     if (!idea.trim()) return
     setPhase('analyzing')
-    setAgents([])
+    setAgents(AGENT_STUBS.map(s => ({ ...s })))
     setPendingDomains([])
     setHistory([])
     setVerdict(null)
     setError(null)
     try {
-      const res = await fetch(`${API}/api/analyze`, {
+      const res = await fetch(`${API}/api/analyze/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idea }),
       })
       if (!res.ok) throw new Error(`Server error: ${res.status}`)
-      const data = await res.json()
-      setAgents(data.agents)
-      setPendingDomains(data.pending_domains)
-      if (data.pending_domains.length === 0) {
-        await fetchVerdict(idea, data.agents, [])
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      const receivedAgents = []
+      let finalPendingDomains = []
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          const data = JSON.parse(line.slice(6))
+          if (data.type === 'agent') {
+            receivedAgents.push(data.agent)
+            setAgents(prev => prev.map(a => a.domain === data.agent.domain ? data.agent : a))
+          } else if (data.type === 'done') {
+            finalPendingDomains = data.pending_domains
+          }
+        }
+      }
+
+      setPendingDomains(finalPendingDomains)
+      if (finalPendingDomains.length === 0) {
+        await fetchVerdict(idea, receivedAgents, [])
       } else {
         setPhase('clarifying')
       }
@@ -123,7 +188,7 @@ function App() {
       setPhase('done')
     } catch (err) {
       setError(err.message)
-      setPhase('clarifying')
+      setPhase('idle')
     }
   }
 
@@ -229,11 +294,9 @@ function App() {
 
       {error && <div className="error">{error}</div>}
 
-      {/* ── Loading spinner ── */}
-      {(phase === 'analyzing' || phase === 'verdict-loading') && (
-        <div className="loading-state">
-          {phase === 'analyzing' ? 'Running agents…' : 'Generating verdict…'}
-        </div>
+      {/* ── Verdict loading ── */}
+      {phase === 'verdict-loading' && (
+        <div className="loading-state">Generating verdict…</div>
       )}
 
       {/* ── Agent cards ── */}
@@ -275,21 +338,54 @@ function App() {
 
       {/* ── Verdict ── */}
       {phase === 'done' && verdict && (
-        <div className={`verdict-banner verdict-banner--${verdict.verdict.toLowerCase().replace(' ', '-')}`}>
+        <div ref={verdictRef} className={`verdict-banner verdict-banner--${verdict.verdict.toLowerCase().replace(' ', '-')}`}>
           <div className="verdict-label">Verdict</div>
           <div className="verdict-value">{verdict.verdict}</div>
           <div className="verdict-confidence">
             <span className="verdict-confidence-label">Overall confidence</span>
             <span className="verdict-confidence-score">{verdict.confidence_score}/100</span>
           </div>
+          {verdict.takeaway && (
+            <div className="verdict-takeaway">{verdict.takeaway}</div>
+          )}
+          {verdict.summary && (
+            <div className="verdict-section">
+              <strong>Overview</strong>
+              <p className="verdict-summary">{verdict.summary}</p>
+            </div>
+          )}
+          {verdict.strengths && verdict.strengths.length > 0 && (
+            <div className="verdict-section">
+              <strong>Strengths</strong>
+              <ul>{verdict.strengths.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            </div>
+          )}
           <div className="verdict-section">
             <strong>Top risks</strong>
             <ul>{verdict.top_risks.map((r, i) => <li key={i}>{r}</li>)}</ul>
           </div>
+          {verdict.insight && (
+            <div className="verdict-section">
+              <strong>Key insight</strong>
+              <p className="verdict-insight">{verdict.insight}</p>
+            </div>
+          )}
           <div className="verdict-section">
             <strong>Suggestions</strong>
             <ul>{verdict.suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
           </div>
+          {verdict.strengthen && verdict.strengthen.length > 0 && (
+            <div className="verdict-section">
+              <strong>How to strengthen</strong>
+              <ul>{verdict.strengthen.map((s, i) => <li key={i}>{s}</li>)}</ul>
+            </div>
+          )}
+          {verdict.next_steps && verdict.next_steps.length > 0 && (
+            <div className="verdict-section">
+              <strong>Next steps</strong>
+              <ol>{verdict.next_steps.map((s, i) => <li key={i}>{s}</li>)}</ol>
+            </div>
+          )}
           <button className="secondary" onClick={handleReset} style={{ marginTop: 16 }}>
             Start over
           </button>

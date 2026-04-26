@@ -23,6 +23,7 @@ router = APIRouter(prefix="/api", tags=["analyze"])
 
 @router.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(req: AnalyzeRequest):
+    print(f"[PITCH RECEIVED] {req.idea}")
     try:
         agents = await run_all_agents_parallel(req.idea, history=[])
         return AnalyzeResponse(agents=agents, pending_domains=pending_domains(agents, history=[]))
@@ -32,6 +33,7 @@ async def analyze(req: AnalyzeRequest):
 
 @router.post("/analyze/stream")
 async def analyze_stream(req: AnalyzeRequest):
+    print(f"[PITCH RECEIVED] {req.idea}")
     async def generator():
         queue: asyncio.Queue = asyncio.Queue()
 
@@ -70,23 +72,40 @@ async def analyze_stream(req: AnalyzeRequest):
 
 @router.post("/clarify", response_model=ClarifyResponse)
 async def clarify(req: ClarifyRequest):
+    print(f"[CLARIFY RECEIVED] domain={req.domain!r} | question={req.question!r} | answer={req.answer!r}")
     try:
         new_qa = ClarifyingQA(domain=req.domain, question=req.question, answer=req.answer)
         updated_history = req.history + [new_qa]
-        updated_agent = await run_single_agent(req.domain, req.idea, updated_history)
+        print(f"[CLARIFY] history now has {len(updated_history)} QA entries")
+        prior_agent = next((a for a in req.agents if a.domain == req.domain), None)
+        prior_confidence = prior_agent.confidence if prior_agent else None
+        print(f"[CLARIFY] prior confidence for {req.domain!r}: {prior_confidence}")
+        updated_agent = await run_single_agent(req.domain, req.idea, updated_history, prior_confidence)
+        print(f"[CLARIFY] agent updated — domain={updated_agent.domain!r} confidence={updated_agent.confidence}")
         agents = [updated_agent if a.domain == req.domain else a for a in req.agents]
+        pd = pending_domains(agents, updated_history)
+        print(f"[CLARIFY] pending_domains remaining={pd}")
         return ClarifyResponse(
             agents=agents,
-            pending_domains=pending_domains(agents, updated_history),
+            pending_domains=pd,
             history=updated_history,
         )
     except Exception as e:
+        print(f"[CLARIFY ERROR] {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/verdict", response_model=VerdictResponse)
 async def verdict(req: VerdictRequest):
+    print(f"[VERDICT] idea={req.idea[:80]!r} | agents={len(req.agents)} | history={len(req.history)}")
     try:
-        return await generate_verdict(req.idea, req.agents, req.history)
+        result = await generate_verdict(req.idea, req.agents, req.history)
+        print(
+            f"[VERDICT] verdict={result.verdict!r} | confidence={result.confidence_score} | "
+            f"top_risks={result.top_risks} | suggestions={result.suggestions} | "
+            f"takeaway={result.takeaway!r}"
+        )
+        return result
     except Exception as e:
+        print(f"[VERDICT ERROR] {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
